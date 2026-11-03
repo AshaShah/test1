@@ -1,0 +1,38 @@
+(today’s call):
+
+Design approved: DECIMAL(18,2), negative amounts kept as sent, no reversal flag
+ZAD-2521 closes with the data model spec (the plan). Loading data is not required.
+The spec should meet the requirements in GitHub issue #3 (ldp-claimsexternal)
+Optional: add NC Aetna, push to stage, and hold it there
+The 15 missing clients are not part of this ticket
+The union of the 3 tables affects all clients and needs its own plan later
+After 2521: do an onboarding ticket end to end, then the DQX project with Pradeep
+
+From Kayley (earlier):
+8. You don’t write CDAP SQL by hand: edit the cdm sheet → run the script → the CDAP team runs it
+9. Scripts go in DataRepo; you run the ALTER in dev, the DBAs run stage/prod
+
+Already done by you:
+10. Column in dev ✅, paper check ✅, Confluence page ✅, 2 PRs open ✅, CDAP blocker found ✅
+
+👉 Next steps, in order
+
+Step 1 (today): post the Jira comment with today’s decisions
+
+Step 2 (today): send Humberto the quick check
+
+Should the spec go as markdown in ldp-claimsexternal (issue #3), or stay on Confluence?
+
+Step 3: complete the spec to match issue #3. Add a definition, PHI classification, lineage/reversals/duplicates, a mapping template, and open questions with owners.
+
+Step 4: commit the spec where Humberto says, via a PR
+
+Step 5 (optional): NC Aetna. First confirm the source field (covered_amount?) and the implied decimals, then map → stage → hold
+
+Step 6: close ZAD-2521 with a final Jira comment linking the spec and PRs
+
+Tomorrow: new laptop → admin access → install Git
+
+Wednesday: DQX meeting with Humberto
+
+Start with Step 1. It takes 2 minutes. 🙂
