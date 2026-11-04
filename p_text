@@ -1,0 +1,33 @@
+Why validation is needed
+Lantern sets no standard file layout for incoming data. About 170 clients are onboarded, but they come through only 10–15 major TPAs/plan sponsors (UHC, Aetna, BCBS Texas, BCBS Minnesota, BCBS IL, BCBS AL, etc.), each sending data for roughly 6–7 clients. A sponsor usually keeps one format across all its clients (e.g. UHC uses the same format for Dell, First Bank, Roche and others), so there are only about 10–15 formats, 20 at most. Lantern also puts no restrictions on values like phone numbers or emails, and sometimes receives junk such as “1, 2, 3, 4” in an email field. There are no quality checks before files land, so the goal is to load only valid data and leave invalid rows out, since they aren’t useful downstream.
+
+Current prep checks (running from the start and still running)
+
+Layout check (file level): if the file doesn’t match the expected layout, it’s rejected outright.
+Null threshold (file level): each file has 8–9 required columns. Five are needed for the demographic match (first name, last name, gender, DOB, relationship code), without which a row can’t be mapped to a SurgeryPlus member ID. If more than 15% of rows (static threshold) have nulls in required columns, the file is rejected. The client/TPA should be told to fix and resend, but that follow-up has never been built. It’s planned as a future observability improvement.
+Null filter (row level): below the threshold (e.g. 10% missing DOB), those rows go to a validation failures table and the other 90% go on to the standard table.
+Dedup (row level): fields mapped to claim ID and claim line act as primary keys. Where a TPA sends only claim ID (e.g. Aetna North Carolina), one row is kept based on service begin date and the rest go to validation failures.
+
+The old validation framework
+It was designed to be metadata/config-driven, applying rules on the fly as files load, so new rules could be added without a code deployment. It covered per-client row- and column-level checks (e.g. column length, phone at least 10 digits, email regex). The business also wanted validation at every layer: prep, structured, standard, demographic match and tagged, so row counts could be compared between layers and a big drop flagged as a pipeline problem. It was built as a fully custom framework, became too complex, and prep validation took about 30 minutes per file, so it was disabled and the old checks were kept. This happened during a move to a different platform.
+
+The new approach: DQX
+Since everything runs on Databricks, the idea is to use DQX’s built-in capabilities instead of building a custom framework, with support from Databricks. Rules are defined on a table, applied as data loads, and cover row- and column-level checks. In his description, good rows are kept and error rows go to a separate table.
+
+The demo
+On a 10-row sample, he showed naming checks per column: is_not_null_and_not_empty on country, is_in_range on age (e.g. 30–40), and is_in_list for specific countries. DQX has many other predefined checks, so rules are just a matter of naming the check and the column.
+
+Product direction
+Engineering could apply every check to every column, but it’s unclear what product actually wants. Product needs to give a vision, e.g. a dashboard showing files breaking specific rules, or flags like “over 60% minors in this file” so someone can talk to that client directly. There is currently no product vision or doc, and one is needed.
+
+How it would be implemented
+Rules can be defined in YAML files or custom classes, with wrapper classes around DQX. The wrapper is invoked just before writing to any table in any layer, applies the rules, and returns results. Based on those, the pipeline either proceeds or stops and raises an error.
+
+Why the null threshold is moving out of prep
+Prompted by the North Carolina issue and a point Humberto raised: rows with nulls in required columns can still have valid allowed amounts, so dropping them at prep loses financial data. So prep will be a dump that mirrors the original file, data is then mapped and sent to structured, and validation happens there. DQX returns a valid dataframe and a quarantine dataframe, with criticality set per rule. For example, DOB at error sends every row with a null DOB to quarantine.
+
+His suggestion to Humberto
+He thought of this after yesterday’s call and hadn’t raised it yet. The right solution depends on the use case: is financial tracking needed per member, or just a count of rows with allowed amounts? Most clients have 8 required fields: the 5 demographic fields plus DX code, procedure code and service begin date. If tracking is per member, the 5 demographic fields are mandatory anyway, because a row without them can’t be matched to a member in the care hub, so its financials are useless. The other 3 drive patient-journey tags (MSK, bariatric, cancer) via diagnosis, procedure and date administered. His proposal is to keep the 5 demographic fields as required and remove the 3 clinical fields from the required list. Rows missing clinical data then flow through with their financials, and the tagging layer simply ignores them without disruption. Only rows with all 5 demographic fields move forward, and financial information is tracked for those members.
+
+Closing
+He’ll go through the current analysis to see whether it solves the use case. If not, they’ll identify gaps and work out a solution, and he’ll share findings for further discussion.
